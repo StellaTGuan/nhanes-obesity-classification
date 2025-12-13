@@ -10,11 +10,10 @@ nhanes-obesity-classification/
 │  ├─ raw/                       # .gitignored (NHANES XPT/CSV files)
 │  └─ processed/                 # small, cleaned CSV/RDS (maybe tracked)
 ├─ R/
-│  ├─ 01_download_nhanes.R
-│  ├─ 02_clean_nhanes.R
-│  ├─ 03_model_logistic.R
-│  ├─ 04_model_boosting.R
-│  └─ 05_evaluate_plots.R
+│  ├─ 01_clean_nhanes.R
+│  ├─ 02_model_logistic.R
+│  ├─ 03_model_boosting.R
+│  └─ 04_evaluate_plots.R
 ├─ analysis/
 │  └─ nhanes_obesity_report.Rmd  # main RMarkdown report
 ├─ output/
