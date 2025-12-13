@@ -2,6 +2,7 @@
 Econ 695 project: predicting adult BMI category from NHANES 2021–2023 using logistic regression and boosting
 
 ## File Structure
+```text
 nhanes-obesity-classification/
 ├─ README.md
 ├─ nhanes-obesity.Rproj          # RStudio project (optional)
