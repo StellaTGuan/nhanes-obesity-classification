@@ -40,6 +40,8 @@ library(yardstick)
 library(dplyr)
 library(stringr)
 library(readr)
+library(ggplot2)
+library(scales)
 
 
 ## ----------------------------------------------
@@ -266,6 +268,48 @@ glimpse(dat2)
 # --- Save cleaned, feature-ready dataset ---
 write_csv(
   dat2,
-  file = "../data/processed/nhanes_adults20_bmi_features.csv",
+  file = "data/processed/nhanes_adults20_bmi_features.csv",
   na = ""
 )
+
+
+# Create BMI category (adult cutoffs) and count distribution
+bmi_dist <- dat2 %>%
+  filter(!is.na(bmi)) %>%
+  mutate(
+    bmi_cat = case_when(
+      bmi < 25   ~ "Underweight & Normal",
+      bmi < 30   ~ "Overweight",
+      TRUE       ~ "Obese"
+    ),
+    bmi_cat = factor(bmi_cat, levels = c("Underweight & Normal", "Overweight", "Obese"))
+  ) %>%
+  count(bmi_cat) %>%
+  mutate(pct = n / sum(n))
+
+p <- ggplot(bmi_dist, aes(x = bmi_cat, y = n)) +
+  geom_col(width = 0.35, fill = "lightblue") +  # narrower bars + blue
+  geom_text(aes(label = percent(pct, accuracy = 0.1)),
+            vjust = 1.4, color = "black", size = 4.2) +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.05))) +
+  labs(
+    title = "BMI Category Distribution (Adults 20+, Non-Pregnant)",
+    x = NULL,
+    y = "Number of Participants"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    panel.grid = element_blank(),          # remove ALL gridlines
+    plot.title = element_text(face = "bold"),
+    axis.text.x = element_text(size = 11)
+  )
+
+# Save figure
+ggsave(
+  filename = "output/figures/bmi_category_distribution.png",
+  plot = p,
+  width = 7,
+  height = 5,
+  dpi = 300
+)
+
