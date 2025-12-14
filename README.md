@@ -14,8 +14,7 @@ nhanes-obesity-classification/
 │  ├─ 02_model_logistic.R
 │  ├─ 03_model_boosting.R
 │  └─ 04_evaluate_plots.R
-├─ analysis/
-│  └─ nhanes_obesity_report.Rmd  # main RMarkdown report
+├─ project_report.pdf            # main RMarkdown report
 ├─ output/
 │  ├─ figures/                   # plots for the report
 │  └─ tables/                    # model summary tables, metrics, etc.
