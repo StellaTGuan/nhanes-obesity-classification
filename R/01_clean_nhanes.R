@@ -265,6 +265,20 @@ dat2 <- dat2 %>%
 # Quick check
 glimpse(dat2)
 
+# educ: 5 levels --> 3 levels
+dat2 <- dat2 %>%
+  mutate(
+    educ = case_when(
+      educ %in% c("Less than 9th grade",
+                  "9-11th grade (Includes 12th grade with no diploma)",
+                  "High school graduate/GED or equivalent") ~ "HS or less",
+      educ == "Some college or AA degree" ~ "Some college/AA",
+      educ == "College graduate or above" ~ "College+",
+      TRUE ~ NA_character_
+    ),
+    educ = factor(educ, levels = c("HS or less", "Some college/AA", "College+"))
+  )
+
 # --- Save cleaned, feature-ready dataset ---
 write_csv(
   dat2,
