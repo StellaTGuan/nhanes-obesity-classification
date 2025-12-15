@@ -19,7 +19,7 @@ nhanes-obesity-classification/
 │  ├─ 01_clean_nhanes.R
 │  ├─ 02_model_logistic.R
 │  ├─ 03_model_boosting.R
-│  └─ 04_evaluate_plots.R
+│
 ├─ project_report.pdf
 ├─ output/
 │  ├─ figures/
