@@ -1,24 +1,14 @@
 feature,Overall
-mvpa_eq_min_wk,1637.231645344344
-fiber_day1,1464.44958225141
-satfat_day1,1408.6697105345152
-age,1351.277896727569
-kcal_day1,954.2875058752536
-pir,943.0592125859434
-sleep_hours_avg,764.4067730867818
-alcohol_drinks_per_day,569.9326557338348
-sexMale,258.4199608377683
-educSome college/AA,189.30890449042144
-educHS or less,179.28866679328678
-kcal_day1_naTRUE,39.48913228174299
-alcohol_drinks_per_day_naTRUE,28.97742691402908
-pir_naTRUE,27.343184112702243
-maritalNever married,22.296761037110393
-fiber_day1_naTRUE,19.687160512145677
-sleep_hours_avg_naTRUE,12.240108860617081
-maritalWidowed/Divorced/Separated,10.455508090006738
-educUnknown,0
-maritalUnknown,0
-age_naTRUE,0
-mvpa_eq_min_wk_naTRUE,0
-satfat_day1_naTRUE,0
+mvpa_eq_min_wk,227.78839362603705
+fiber_day1,123.86231966802895
+age,103.15454348914324
+satfat_day1,54.36258757676912
+sleep_hours_avg,53.88217032081882
+alcohol_drinks_per_day,38.84051624577936
+educSome college/AA,35.88822357736772
+kcal_day1,30.286540739475605
+pir,29.844667292754675
+maritalNever married,16.092069266537578
+sexMale,14.758350969911227
+educHS or less,1.3482361149991429
+maritalWidowed/Divorced/Separated,0

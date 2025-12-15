@@ -1,13 +1,9 @@
 # ============================================================
 # 03_model_boosting.R
 # Gradient Boosting Trees (GBM) for 3-class BMI classification
-# Outputs: CV tuning table, test metrics, confusion matrix fig,
-#          CV curve fig (error vs #trees), variable importance fig
+# ASSUMES cleaned dataset has NO NAs (complete cases)
 # ============================================================
 
-# -------------------------
-# Packages
-# -------------------------
 required_pkgs <- c("tidyverse", "readr", "caret", "gbm", "yardstick")
 installed <- rownames(installed.packages())
 to_install <- setdiff(required_pkgs, installed)
@@ -21,15 +17,16 @@ library(yardstick)
 
 set.seed(1)
 
+dir.create("output/tables", recursive = TRUE, showWarnings = FALSE)
+dir.create("output/figures", recursive = TRUE, showWarnings = FALSE)
+
 # -------------------------
-# Load data
+# Load data (complete cases)
 # -------------------------
 path <- "data/processed/nhanes_adults20_bmi_features.csv"
 dat <- read_csv(path, show_col_types = FALSE)
 
-# -------------------------
-# Outcome: 3-class BMI (safe factor levels)
-# -------------------------
+# Outcome
 dat <- dat %>%
   mutate(
     bmi_cat3 = case_when(
@@ -40,76 +37,37 @@ dat <- dat %>%
     bmi_cat3 = factor(bmi_cat3, levels = c("UnderNormal", "Overweight", "Obese"))
   )
 
+# Predictors used
+candidate_factor <- c("sex", "educ", "marital")
+candidate_num <- c(
+  "age", "pir", "alcohol_drinks_per_day", "sleep_hours_avg", "mvpa_eq_min_wk",
+  "kcal_day1", "fiber_day1", "satfat_day1"
+)
+
+factor_cols <- intersect(candidate_factor, names(dat))
+num_cols    <- intersect(candidate_num, names(dat))
+
+keep_vars <- c("bmi_cat3", factor_cols, num_cols)
+
+dat <- dat %>%
+  select(any_of(keep_vars)) %>%
+  mutate(across(all_of(factor_cols), ~ factor(.x)))
+
+# Sanity check: should be NA-free
+if (anyNA(dat)) stop("Found NA values in modeling dataset. Re-run 01_clean_nhanes.R.")
+
 # -------------------------
 # Train/test split (stratified)
 # -------------------------
 idx <- createDataPartition(dat$bmi_cat3, p = 0.75, list = FALSE)
-train <- dat[idx, ]
-test  <- dat[-idx, ]
-
-# -------------------------
-# Missing handling AFTER split (avoid leakage)
-# - Factors: NA -> "Unknown"
-# - Numeric: add *_na flags + median impute using TRAIN medians
-# -------------------------
-candidate_factor <- c("sex", "educ", "marital")
-factor_cols <- intersect(candidate_factor, names(train))
-
-candidate_num <- c(
-  "age",
-  "pir",          # income-related (poverty-income ratio)
-  "alcohol_drinks_per_day",
-  "sleep_hours_avg",
-  "mvpa_eq_min_wk",
-  # NEW dietary predictors
-  "kcal_day1",
-  "fiber_day1",
-  "satfat_day1"
-)
-num_cols <- intersect(candidate_num, names(train))
-
-make_unknown_factor <- function(x) {
-  x <- as.character(x)
-  x[is.na(x) | x == ""] <- "Unknown"
-  factor(x)
-}
-
-if (length(factor_cols) > 0) {
-  train <- train %>% mutate(across(all_of(factor_cols), make_unknown_factor))
-  test  <- test  %>% mutate(across(all_of(factor_cols), make_unknown_factor))
-}
-
-if (length(num_cols) > 0) {
-  train_medians <- sapply(train[num_cols], function(v) median(v, na.rm = TRUE))
-  
-  for (v in num_cols) {
-    flag <- paste0(v, "_na")
-    train[[flag]] <- is.na(train[[v]])
-    test[[flag]]  <- is.na(test[[v]])
-    
-    train[[v]] <- if_else(is.na(train[[v]]), train_medians[[v]], train[[v]])
-    test[[v]]  <- if_else(is.na(test[[v]]),  train_medians[[v]], test[[v]])
-  }
-}
-
-# Keep only modeling columns (don’t use id or raw bmi)
-keep_vars <- c("bmi_cat3", factor_cols, num_cols, paste0(num_cols, "_na"))
-keep_vars <- keep_vars[keep_vars %in% names(train)]
-train_mod <- train %>% select(all_of(keep_vars))
-test_mod  <- test  %>% select(all_of(keep_vars))
+train_mod <- dat[idx, ]
+test_mod  <- dat[-idx, ]
 
 # -------------------------
 # GBM model (caret)
-# Key tuning params match lecture:
-# - n.trees (B), shrinkage (learning rate), interaction.depth (d)
 # -------------------------
-ctrl <- trainControl(
-  method = "cv",
-  number = 5,
-  classProbs = TRUE
-)
+ctrl <- trainControl(method = "cv", number = 5, classProbs = TRUE)
 
-# Keep grid moderate so it runs reasonably fast
 grid <- expand.grid(
   n.trees = c(100, 300, 600, 1000),
   interaction.depth = c(1, 2, 3),
@@ -117,7 +75,6 @@ grid <- expand.grid(
   n.minobsinnode = c(10, 20)
 )
 
-set.seed(1)
 fit_gbm <- train(
   bmi_cat3 ~ .,
   data = train_mod,
@@ -128,7 +85,6 @@ fit_gbm <- train(
   verbose = FALSE
 )
 
-# Save CV results + chosen tuning parameters
 write_csv(fit_gbm$results, "output/tables/gbm_cv_results.csv")
 write_csv(as_tibble(fit_gbm$bestTune), "output/tables/gbm_best_tune.csv")
 
@@ -143,14 +99,12 @@ print(cm)
 sink()
 
 test_eval <- tibble(truth = test_mod$bmi_cat3, estimate = pred_class)
-
 metrics_tbl <- tibble(
   accuracy = yardstick::accuracy_vec(test_eval$truth, test_eval$estimate),
-  macro_f1 = yardstick::f_meas_vec(test_eval$truth, test_eval$estimate, estimator = "macro")
+  macro_f1  = yardstick::f_meas_vec(test_eval$truth, test_eval$estimate, estimator = "macro")
 )
 write_csv(metrics_tbl, "output/tables/gbm_test_metrics.csv")
 
-# Confusion matrix figure
 cm_df <- as.data.frame(cm$table)
 p_cm <- ggplot(cm_df, aes(x = Reference, y = Prediction, fill = Freq)) +
   geom_tile(color = "white") +
@@ -163,9 +117,7 @@ p_cm <- ggplot(cm_df, aes(x = Reference, y = Prediction, fill = Freq)) +
 ggsave("output/figures/gbm_confusion_matrix.png", p_cm, width = 6.5, height = 5, dpi = 300)
 
 # -------------------------
-# CV curve figure (like lecture: error vs #trees, for best (depth, shrinkage, minobs))
-# We'll plot CV error = 1 - Accuracy using only the best combo,
-# so the plot is a single clean curve (not multiple groups/panels).
+# CV curve figure (error vs #trees) for best combo
 # -------------------------
 cv <- fit_gbm$results
 best <- fit_gbm$bestTune
@@ -208,16 +160,13 @@ p_vi <- vi %>%
   ggplot(aes(x = reorder(feature, Overall), y = Overall)) +
   geom_col() +
   coord_flip() +
-  labs(title = paste0("GBM Variable Importance (Top ", top_k, ")"),
+  labs(title = paste0("GBM Variable Importance"),
        x = NULL, y = "Importance") +
   theme_minimal(base_size = 13)
 
 ggsave("output/figures/gbm_var_importance.png", p_vi, width = 7.0, height = 5.5, dpi = 300)
 
-# -------------------------
-# Quick console output
-# -------------------------
-cat("\n=== GBM (Gradient Boosting Trees) ===\n")
+cat("\n=== GBM (complete cases) ===\n")
 print(fit_gbm)
 cat("\nTest metrics:\n")
 print(metrics_tbl)

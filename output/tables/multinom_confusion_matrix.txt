@@ -2,29 +2,29 @@ Confusion Matrix and Statistics
 
              Reference
 Prediction    UnderNormal Overweight Obese
-  UnderNormal          78         60    58
-  Overweight           80        104    82
-  Obese               238        311   469
+  UnderNormal          53         42    41
+  Overweight           34         76    43
+  Obese               155        186   306
 
 Overall Statistics
                                           
-               Accuracy : 0.4399          
-                 95% CI : (0.4144, 0.4656)
-    No Information Rate : 0.4115          
-    P-Value [Acc > NIR] : 0.01438         
+               Accuracy : 0.4647          
+                 95% CI : (0.4324, 0.4973)
+    No Information Rate : 0.4167          
+    P-Value [Acc > NIR] : 0.00165         
                                           
-                  Kappa : 0.1021          
+                  Kappa : 0.1385          
                                           
  Mcnemar's Test P-Value : < 2e-16         
 
 Statistics by Class:
 
                      Class: UnderNormal Class: Overweight Class: Obese
-Sensitivity                      0.1970           0.21895       0.7701
-Specificity                      0.8911           0.83881       0.3697
-Pos Pred Value                   0.3980           0.39098       0.4607
-Neg Pred Value                   0.7523           0.69440       0.6970
-Prevalence                       0.2676           0.32095       0.4115
-Detection Rate                   0.0527           0.07027       0.3169
-Detection Prevalence             0.1324           0.17973       0.6878
-Balanced Accuracy                0.5441           0.52888       0.5699
+Sensitivity                     0.21901            0.2500       0.7846
+Specificity                     0.88040            0.8782       0.3755
+Pos Pred Value                  0.38971            0.4967       0.4730
+Neg Pred Value                  0.76375            0.7088       0.7093
+Prevalence                      0.25855            0.3248       0.4167
+Detection Rate                  0.05662            0.0812       0.3269
+Detection Prevalence            0.14530            0.1635       0.6912
+Balanced Accuracy               0.54971            0.5641       0.5800

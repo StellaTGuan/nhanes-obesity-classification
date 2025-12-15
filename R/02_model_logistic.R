@@ -1,16 +1,10 @@
 # ============================================================
 # 02_model_logistic.R
 # Multinomial logistic regression (3-class BMI outcome)
-# + simple penalization diagnostics (+ optional L1 robustness)
+# ASSUMES cleaned dataset has NO NAs (complete cases)
 # ============================================================
 
-# -------------------------
-# Packages
-# -------------------------
-required_pkgs <- c(
-  "tidyverse", "readr", "caret", "nnet", "yardstick", "glmnet", "Matrix"
-)
-
+required_pkgs <- c("tidyverse", "readr", "caret", "nnet", "yardstick")
 installed <- rownames(installed.packages())
 to_install <- setdiff(required_pkgs, installed)
 if (length(to_install) > 0) install.packages(to_install)
@@ -23,17 +17,16 @@ library(yardstick)
 
 set.seed(1)
 
+dir.create("output/tables", recursive = TRUE, showWarnings = FALSE)
+dir.create("output/figures", recursive = TRUE, showWarnings = FALSE)
 
 # -------------------------
-# Load data
+# Load data (complete cases)
 # -------------------------
 path <- "data/processed/nhanes_adults20_bmi_features.csv"
 dat <- read_csv(path, show_col_types = FALSE)
 
-# -------------------------
-# Outcome: 3-class BMI (Underweight+Normal combined)
-# NOTE: Use safe factor levels for caret classProbs.
-# -------------------------
+# Outcome
 dat <- dat %>%
   mutate(
     bmi_cat3 = case_when(
@@ -44,62 +37,33 @@ dat <- dat %>%
     bmi_cat3 = factor(bmi_cat3, levels = c("UnderNormal", "Overweight", "Obese"))
   )
 
-# -------------------------
-# Train/test split (stratified)
-# -------------------------
-idx <- createDataPartition(dat$bmi_cat3, p = 0.75, list = FALSE)
-train <- dat[idx, ]
-test  <- dat[-idx, ]
-
-# -------------------------
-# Missing handling AFTER split (avoid leakage)
-# - Factors: NA -> "Unknown"
-# - Numeric: add *_na flags + median impute using TRAIN medians
-# -------------------------
+# Predictors used
 factor_cols <- c("sex", "educ", "marital")
-
-# NEW dietary predictors added to modeling set
 num_cols <- c(
   "age", "pir", "alcohol_drinks_per_day", "sleep_hours_avg", "mvpa_eq_min_wk",
   "kcal_day1", "fiber_day1", "satfat_day1"
 )
 
-make_unknown_factor <- function(x) {
-  x <- as.character(x)
-  x[is.na(x) | x == ""] <- "Unknown"
-  factor(x)
-}
+keep_vars <- c("bmi_cat3", factor_cols, num_cols)
 
-train <- train %>% mutate(across(all_of(factor_cols), make_unknown_factor))
-test  <- test  %>% mutate(across(all_of(factor_cols), make_unknown_factor))
+dat <- dat %>%
+  select(any_of(keep_vars)) %>%
+  mutate(across(all_of(factor_cols), ~ factor(.x)))
 
-train_medians <- sapply(train[num_cols], function(v) median(v, na.rm = TRUE))
-
-for (v in num_cols) {
-  flag <- paste0(v, "_na")
-  train[[flag]] <- is.na(train[[v]])
-  test[[flag]]  <- is.na(test[[v]])
-  
-  train[[v]] <- if_else(is.na(train[[v]]), train_medians[[v]], train[[v]])
-  test[[v]]  <- if_else(is.na(test[[v]]),  train_medians[[v]], test[[v]])
-}
-
-# Keep only modeling columns (don’t use id or raw bmi)
-keep_vars <- c("bmi_cat3", factor_cols, num_cols, paste0(num_cols, "_na"))
-train_mod <- train %>% select(all_of(keep_vars))
-test_mod  <- test  %>% select(all_of(keep_vars))
+# Sanity check: should be NA-free
+if (anyNA(dat)) stop("Found NA values in modeling dataset. Re-run 01_clean_nhanes.R.")
 
 # -------------------------
-# 3.1 Baseline multinomial logistic regression (caret + nnet::multinom)
-# - Tune decay with 5-fold CV
-# - Center/scale predictors
+# Train/test split (stratified)
 # -------------------------
-ctrl <- trainControl(
-  method = "cv",
-  number = 5,
-  classProbs = TRUE
-)
+idx <- createDataPartition(dat$bmi_cat3, p = 0.75, list = FALSE)
+train_mod <- dat[idx, ]
+test_mod  <- dat[-idx, ]
 
+# -------------------------
+# Multinomial logistic regression (caret + nnet::multinom)
+# -------------------------
+ctrl <- trainControl(method = "cv", number = 5, classProbs = TRUE)
 grid <- expand.grid(decay = c(0, 1e-4, 1e-3, 1e-2, 1e-1))
 
 fit_multinom <- train(
@@ -112,11 +76,10 @@ fit_multinom <- train(
   metric = "Accuracy"
 )
 
-# Save tuning results (useful for report + reproducibility)
 write_csv(fit_multinom$results, "output/tables/multinom_cv_results.csv")
 
 # -------------------------
-# Test evaluation (baseline)
+# Test evaluation
 # -------------------------
 pred_class <- predict(fit_multinom, newdata = test_mod)
 
@@ -126,14 +89,12 @@ print(cm)
 sink()
 
 test_eval <- tibble(truth = test_mod$bmi_cat3, estimate = pred_class)
-
 metrics_tbl <- tibble(
   accuracy = yardstick::accuracy_vec(test_eval$truth, test_eval$estimate),
-  macro_f1 = yardstick::f_meas_vec(test_eval$truth, test_eval$estimate, estimator = "macro")
+  macro_f1  = yardstick::f_meas_vec(test_eval$truth, test_eval$estimate, estimator = "macro")
 )
 write_csv(metrics_tbl, "output/tables/multinom_test_metrics.csv")
 
-# Confusion matrix figure (one figure is enough for report)
 cm_df <- as.data.frame(cm$table)
 p_cm <- ggplot(cm_df, aes(x = Reference, y = Prediction, fill = Freq)) +
   geom_tile(color = "white") +
@@ -146,9 +107,7 @@ p_cm <- ggplot(cm_df, aes(x = Reference, y = Prediction, fill = Freq)) +
 ggsave("output/figures/multinom_confusion_matrix.png", p_cm, width = 6.5, height = 5, dpi = 300)
 
 # -------------------------
-# 3.1.2 Penalization diagnostics
-# (A) CV vs test gap (overfitting signal)
-# (B) Max absolute coefficient (instability/separation signal)
+# Diagnostics
 # -------------------------
 best_cv_acc <- max(fit_multinom$results$Accuracy, na.rm = TRUE)
 test_acc <- metrics_tbl$accuracy[1]
@@ -164,44 +123,26 @@ raw_model <- fit_multinom$finalModel
 coefs_mat <- coef(raw_model)
 max_abs_coef <- max(abs(coefs_mat), na.rm = TRUE)
 
-coef_diag <- tibble(
-  max_abs_coef = max_abs_coef
-)
+coef_diag <- tibble(max_abs_coef = max_abs_coef)
 write_csv(coef_diag, "output/tables/multinom_coef_diagnostic.csv")
 
-# -------------------------
-# Quick console output
-# -------------------------
-cat("\n=== Multinomial logit (baseline) ===\n")
-print(fit_multinom)
-cat("\nTest metrics:\n")
-print(metrics_tbl)
-cat("\nDiagnostics:\n")
-print(gap_tbl)
-print(coef_diag)
-
-library(dplyr)
-library(tibble)
+# Optional: top coefficients table
 library(purrr)
-
 coefs <- coef(fit_multinom$finalModel)
-
 coef_tbl <- purrr::imap_dfr(
-  asplit(coefs, 1),  # split by row (class)
-  ~ tibble(
-    class = .y,                      # e.g., "Overweight", "Obese"
-    term  = names(.x),
-    beta  = as.numeric(.x),
-    odds_ratio = exp(beta)
-  )
+  asplit(coefs, 1),
+  ~ tibble(class = .y, term = names(.x), beta = as.numeric(.x), odds_ratio = exp(beta))
 ) %>%
   arrange(class, desc(abs(beta)))
-
-coef_tbl
 
 coef_tbl %>%
   group_by(class) %>%
   slice_max(order_by = abs(beta), n = 10) %>%
   ungroup()
+
+cat("\n=== Multinomial logit (complete cases) ===\n")
+print(fit_multinom)
+cat("\nTest metrics:\n")
+print(metrics_tbl)
 
 write_csv(coef_tbl, "output/tables/multinom_coefs.csv")
