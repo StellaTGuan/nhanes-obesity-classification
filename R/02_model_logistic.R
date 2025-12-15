@@ -179,3 +179,29 @@ print(metrics_tbl)
 cat("\nDiagnostics:\n")
 print(gap_tbl)
 print(coef_diag)
+
+library(dplyr)
+library(tibble)
+library(purrr)
+
+coefs <- coef(fit_multinom$finalModel)
+
+coef_tbl <- purrr::imap_dfr(
+  asplit(coefs, 1),  # split by row (class)
+  ~ tibble(
+    class = .y,                      # e.g., "Overweight", "Obese"
+    term  = names(.x),
+    beta  = as.numeric(.x),
+    odds_ratio = exp(beta)
+  )
+) %>%
+  arrange(class, desc(abs(beta)))
+
+coef_tbl
+
+coef_tbl %>%
+  group_by(class) %>%
+  slice_max(order_by = abs(beta), n = 10) %>%
+  ungroup()
+
+write_csv(coef_tbl, "output/tables/multinom_coefs.csv")

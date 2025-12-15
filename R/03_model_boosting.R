@@ -193,7 +193,7 @@ p_cv <- ggplot(cv_plot_df, aes(x = n.trees, y = cv_error)) +
 ggsave("output/figures/gbm_cv_curve.png", p_cv, width = 7.5, height = 5, dpi = 300)
 
 # -------------------------
-# Variable importance figure (report-friendly)
+# Variable importance figure
 # -------------------------
 vi <- varImp(fit_gbm, scale = FALSE)$importance %>%
   rownames_to_column("feature") %>%
