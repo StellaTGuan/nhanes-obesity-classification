@@ -1,4 +1,7 @@
+# ==================
 # 01_clean_nhanes.R
+# Data Processing
+# ==================
 
 ### Variables and Files
 ## Merge Key
@@ -8,20 +11,25 @@
 # BMX_L.xpt: outcome, BMI data
 
 ## Demographical
-# DEMO_L.xpt 
+# DEMO_L.xpt
 # "RIAGENDR", "RIDAGEYR", "DMDEDUC2", "DMDMARTZ", "RIDEXPRG", "INDFMPIR",
-
 
 ## Lifestyle Variables
 # PAQ_L.xpt: Physical Exercises
-  # only EXCLUDE PAD680
-# ALQ_L.xpt: 
-  # 0 if ALQ111 == No (never drank) or ALQ121 indicates no drinking in past 12 months
-  # else ALQ130
+# only EXCLUDE PAD680
+# ALQ_L.xpt:
+# 0 if ALQ111 == No (never drank) or ALQ121 indicates no drinking in past 12 months
+# else ALQ130
 # SLQ_L.xpt: Sleep
-  # (5*SLD012 + 2*SLD013)/7
-  # SLD012 = sleep hours on weekdays/workdays
-  # SLD013 = sleep hours on weekends
+# (5*SLD012 + 2*SLD013)/7
+# SLD012 = sleep hours on weekdays/workdays
+# SLD013 = sleep hours on weekends
+
+## Dietary Variables (NEW)
+# DR1TOT_L.xpt:
+# DR1TKCAL = Total energy (kcal), Day 1
+# DR1TFIBE = Dietary fiber (g), Day 1
+# DR1TSFAT = Saturated fat (g), Day 1
 
 required_pkgs <- c(
   "nhanesA", "tidyverse", "nnet", "caret", "yardstick"
@@ -43,7 +51,6 @@ library(readr)
 library(ggplot2)
 library(scales)
 
-
 ## ----------------------------------------------
 ## Load needed components & Keep only needed cols
 ## ----------------------------------------------
@@ -55,10 +62,6 @@ demo <- nhanes("DEMO_L") %>%
 ## Outcome (BMI)
 bmx <- nhanes("BMX_L") %>%
   select(SEQN, BMXBMI)
-
-## Smoking: SMQ040
-smq <- nhanes("SMQ_L") %>%
-  select(SEQN, SMQ040)
 
 ## Physical exercise: keep these, EXCLUDE PAD680
 paq <- nhanes("PAQ_L") %>%
@@ -72,28 +75,22 @@ alq <- nhanes("ALQ_L") %>%
 slq <- nhanes("SLQ_L") %>%
   select(SEQN, SLD012, SLD013)
 
+## Dietary (NEW): Day 1 total nutrient intakes
+dr1tot <- nhanes("DR1TOT_L") %>%
+  select(SEQN, DR1TKCAL, DR1TFIBE, DR1TSFAT)
+
 ## -----------------------
 ## Merge (SEQN key)
 ## -----------------------
 dat_rawvars <- demo %>%
   inner_join(bmx, by = "SEQN") %>% # keep BMI
-  left_join(smq, by = "SEQN") %>%
   left_join(paq, by = "SEQN") %>%
   left_join(alq, by = "SEQN") %>%
-  left_join(slq, by = "SEQN")
+  left_join(slq, by = "SEQN") %>%
+  left_join(dr1tot, by = "SEQN")   # NEW
 
 glimpse(dat_rawvars)
 
-
-
-
-# --- helper: NHANES special missing codes -> NA (only matters if they exist in your numeric cols)
-nhanes_to_na <- function(x) {
-  if (is.numeric(x)) {
-    x[x %in% c(".", 7, 9, 77, 99, 777, 999, 7777, 9999)] <- NA
-  }
-  x
-}
 
 
 # Convert unit text -> multiplier to get "times per week"
@@ -133,7 +130,12 @@ rename(
   alc_drinks_day  = ALQ130,
   
   sleep_wkday     = SLD012,
-  sleep_wkend     = SLD013
+  sleep_wkend     = SLD013,
+  
+  # Dietary (NEW)
+  kcal_day1       = DR1TKCAL,
+  fiber_day1      = DR1TFIBE,
+  satfat_day1     = DR1TSFAT
 ) %>%
   # ---------------------------------------------------------
 # 2) Standardize obvious "non-information" to NA
@@ -154,7 +156,8 @@ mutate(
 # ---------------------------------------------------------
 mutate(
   across(c(age, pir, bmi, mod_freq, mod_mins, vig_freq, vig_mins,
-           alc_drinks_day, sleep_wkday, sleep_wkend),
+           alc_drinks_day, sleep_wkday, sleep_wkend,
+           kcal_day1, fiber_day1, satfat_day1),   # NEW
          ~ as.numeric(.)),
   
   alc_drinks_day = if_else(alc_drinks_day %in% c(777, 999), NA_real_, alc_drinks_day)
@@ -168,6 +171,9 @@ mutate(
 #    - mins/session: [0, 720]  (0–12 hours per session; very generous)
 #    - freq: [0, 365]          (max "per day" frequency across a year)
 #    - drinks/day: [0, 50]     (very generous upper bound)
+#    - kcal/day: [200, 8000]   (very broad plausible intake range)
+#    - fiber/day: [0, 200]     (very generous)
+#    - sat fat/day: [0, 200]   (very generous)
 # ---------------------------------------------------------
 mutate(
   age  = if_else(age  >= 0  & age  <= 120, age, NA_real_),
@@ -183,7 +189,12 @@ mutate(
   mod_freq = if_else(mod_freq >= 0 & mod_freq <= 365, mod_freq, NA_real_),
   vig_freq = if_else(vig_freq >= 0 & vig_freq <= 365, vig_freq, NA_real_),
   
-  alc_drinks_day = if_else(alc_drinks_day >= 0 & alc_drinks_day <= 50, alc_drinks_day, NA_real_)
+  alc_drinks_day = if_else(alc_drinks_day >= 0 & alc_drinks_day <= 50, alc_drinks_day, NA_real_),
+  
+  # NEW dietary sanity checks
+  kcal_day1  = if_else(kcal_day1  >= 200 & kcal_day1  <= 8000, kcal_day1,  NA_real_),
+  fiber_day1 = if_else(fiber_day1 >= 0   & fiber_day1 <= 200,  fiber_day1, NA_real_),
+  satfat_day1= if_else(satfat_day1>= 0   & satfat_day1<= 200,  satfat_day1, NA_real_)
 ) %>%
   # ---------------------------------------------------------
 # 5) Feature engineering (handles your exact distinct values)
@@ -250,13 +261,14 @@ mutate(
     pregnant_at_exam,
     alcohol_drinks_per_day,
     sleep_hours_avg,
-    mvpa_eq_min_wk
+    mvpa_eq_min_wk,
+    kcal_day1, fiber_day1, satfat_day1   # NEW
   )
 
 
 dat2 <- dat2 %>%
   filter(
-    !is.na(bmi),                                # make sure no NA in outcome var 
+    !is.na(bmi),                                # make sure no NA in outcome var
     age >= 20,                                  # only adults 20+
     is.na(pregnant_at_exam) | pregnant_at_exam == 0  # exclude confirmed pregnant
   )%>%
@@ -326,4 +338,3 @@ ggsave(
   height = 5,
   dpi = 300
 )
-

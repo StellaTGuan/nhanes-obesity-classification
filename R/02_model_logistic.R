@@ -21,24 +21,14 @@ library(caret)
 library(nnet)
 library(yardstick)
 
-
 set.seed(1)
 
-# -------------------------
-# Paths + folders
-# -------------------------
-in_path <- "data/processed/nhanes_adults20_bmi_features.csv"
-if (!file.exists(in_path)) {
-  stop("Missing file: ", in_path, "\nRun 01_clean_nhanes.R first.")
-}
-
-dir.create("output/tables", recursive = TRUE, showWarnings = FALSE)
-dir.create("output/figures", recursive = TRUE, showWarnings = FALSE)
 
 # -------------------------
 # Load data
 # -------------------------
-dat <- read_csv(in_path, show_col_types = FALSE)
+path <- "data/processed/nhanes_adults20_bmi_features.csv"
+dat <- read_csv(path, show_col_types = FALSE)
 
 # -------------------------
 # Outcome: 3-class BMI (Underweight+Normal combined)
@@ -67,7 +57,12 @@ test  <- dat[-idx, ]
 # - Numeric: add *_na flags + median impute using TRAIN medians
 # -------------------------
 factor_cols <- c("sex", "educ", "marital")
-num_cols    <- c("age", "pir", "alcohol_drinks_per_day", "sleep_hours_avg", "mvpa_eq_min_wk")
+
+# NEW dietary predictors added to modeling set
+num_cols <- c(
+  "age", "pir", "alcohol_drinks_per_day", "sleep_hours_avg", "mvpa_eq_min_wk",
+  "kcal_day1", "fiber_day1", "satfat_day1"
+)
 
 make_unknown_factor <- function(x) {
   x <- as.character(x)
@@ -174,7 +169,6 @@ coef_diag <- tibble(
 )
 write_csv(coef_diag, "output/tables/multinom_coef_diagnostic.csv")
 
-
 # -------------------------
 # Quick console output
 # -------------------------
@@ -185,6 +179,3 @@ print(metrics_tbl)
 cat("\nDiagnostics:\n")
 print(gap_tbl)
 print(coef_diag)
-
-
-

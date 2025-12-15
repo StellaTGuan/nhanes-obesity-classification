@@ -1,0 +1,30 @@
+Confusion Matrix and Statistics
+
+             Reference
+Prediction    UnderNormal Overweight Obese
+  UnderNormal          98         91    63
+  Overweight           98        132   118
+  Obese               200        252   428
+
+Overall Statistics
+                                          
+               Accuracy : 0.4446          
+                 95% CI : (0.4191, 0.4703)
+    No Information Rate : 0.4115          
+    P-Value [Acc > NIR] : 0.005324        
+                                          
+                  Kappa : 0.1244          
+                                          
+ Mcnemar's Test P-Value : < 2.2e-16       
+
+Statistics by Class:
+
+                     Class: UnderNormal Class: Overweight Class: Obese
+Sensitivity                     0.24747           0.27789       0.7028
+Specificity                     0.85793           0.78507       0.4811
+Pos Pred Value                  0.38889           0.37931       0.4864
+Neg Pred Value                  0.75733           0.69700       0.6983
+Prevalence                      0.26757           0.32095       0.4115
+Detection Rate                  0.06622           0.08919       0.2892
+Detection Prevalence            0.17027           0.23514       0.5946
+Balanced Accuracy               0.55270           0.53148       0.5919
